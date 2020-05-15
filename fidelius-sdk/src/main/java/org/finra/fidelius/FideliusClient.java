@@ -27,16 +27,10 @@ import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.regions.*;
 import com.amazonaws.regions.Region;
 import com.amazonaws.retry.PredefinedRetryPolicies;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.*;
-import com.amazonaws.services.kms.AWSKMS;
 import com.amazonaws.services.kms.AWSKMSClient;
-import com.amazonaws.services.kms.AWSKMSClientBuilder;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenService;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClient;
 import com.amazonaws.services.securitytoken.AWSSecurityTokenServiceClientBuilder;
@@ -53,7 +47,7 @@ public class FideliusClient {
     protected JCredStash jCredStash;
     protected AWSSecurityTokenService awsSecurityTokenService;
 
-    private final AmazonEC2 client;
+    private AmazonEC2Client client;
 
     public FideliusClient() {
         this(null, new DefaultAWSCredentialsProviderChain());
@@ -79,36 +73,30 @@ public class FideliusClient {
             kmsEc2ClientConfiguration.setRetryPolicy(PredefinedRetryPolicies.getDefaultRetryPolicyWithCustomMaxRetries(5));
         }
 
-        AmazonDynamoDBClientBuilder ddbBuilder = AmazonDynamoDBClientBuilder.standard()
-                .withCredentials(provider)
-                .withClientConfiguration(clientConf);
+        AmazonDynamoDBClient ddb = new AmazonDynamoDBClient(provider, clientConf);
 
-        AWSKMSClientBuilder kmsBuilder = AWSKMSClientBuilder.standard()
-                .withCredentials(provider)
-                .withClientConfiguration(kmsEc2ClientConfiguration);
+        AWSKMSClient kms = new AWSKMSClient(provider, kmsEc2ClientConfiguration);
 
-        AWSSecurityTokenServiceClientBuilder stsBuilder =  AWSSecurityTokenServiceClientBuilder.standard()
+        AWSSecurityTokenServiceClientBuilder awsSecurityTokenServiceClientBuilder =  AWSSecurityTokenServiceClient
+                .builder()
                 .withClientConfiguration(clientConf)
                 .withCredentials(provider);
 
-        AmazonEC2ClientBuilder clientBuilder = AmazonEC2ClientBuilder.standard()
-                .withCredentials(provider)
-                .withClientConfiguration(kmsEc2ClientConfiguration);
+        client = new AmazonEC2Client(provider, kmsEc2ClientConfiguration);
 
-        if(region != null){
+        if(region != null) {
             Regions regionEnum = Regions.fromName(region);
-            ddbBuilder.withRegion(regionEnum);
-            kmsBuilder.withRegion(regionEnum);
-            stsBuilder.withRegion(regionEnum);
-            clientBuilder.withRegion(regionEnum);
+            ddb.withRegion(regionEnum);
+            kms.withRegion(regionEnum);
+            awsSecurityTokenServiceClientBuilder.withRegion(regionEnum);
+            client.setRegion(Region.getRegion(regionEnum));
         }
 
-        client = clientBuilder.build();
-        awsSecurityTokenService = stsBuilder.build();
-        jCredStash = new JCredStash(ddbBuilder.build(), kmsBuilder.build(), awsSecurityTokenService);
+        awsSecurityTokenService = awsSecurityTokenServiceClientBuilder.build();
+        jCredStash = new JCredStash(ddb, kms, awsSecurityTokenService);
     }
 
-    protected void setFideliusClient(AmazonDynamoDB ddb, AWSKMS kms) {
+    protected void setFideliusClient(AmazonDynamoDBClient ddb, AWSKMSClient kms) {
         jCredStash = new JCredStash(ddb, kms, awsSecurityTokenService);
     }
 
